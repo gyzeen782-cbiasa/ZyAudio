@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Zyeen Audio Studio — Professional web-based audio editor" />
+  <title>Zyeen Audio Studio</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar" id="sidebar" aria-label="Navigation">
+    <div class="sidebar-logo">
+      <div class="logo-mark">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M4 10 Q10 2 16 10 Q10 18 4 10Z" fill="url(#lg)" />
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#00e8ff"/>
+              <stop offset="100%" stop-color="#9d4edd"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <span class="lt-name">Zyeen</span>
+        <span class="lt-sub">Audio Studio</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-label">WORKSPACE</span>
+      <button class="nav-item active" data-section="studio">
+        <span class="ni-icon">🎛️</span><span>Studio</span>
+      </button>
+      <button class="nav-item" data-section="presets">
+        <span class="ni-icon">⚡</span><span>Presets</span>
+      </button>
+      <button class="nav-item" data-section="history">
+        <span class="ni-icon">🕐</span><span>History</span>
+        <span class="nav-badge" id="histBadge">0</span>
+      </button>
+
+      <span class="nav-label">TOOLS</span>
+      <button class="nav-item" id="navOpenFile">
+        <span class="ni-icon">📂</span><span>Open File</span>
+      </button>
+      <button class="nav-item" id="navResetAll">
+        <span class="ni-icon">↺</span><span>Reset All</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="sf-status">
+        <span class="sf-dot" id="sfDot"></span>
+        <span id="sfLabel">Ready</span>
+      </div>
+      <div class="sf-note">Web Audio API · No server needed</div>
+    </div>
+  </aside>
+
+  <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main" id="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="sidebar">
+        <span></span><span></span><span></span>
+      </button>
+
+      <div class="topbar-brand">
+        <div class="tb-logo-sm">Z</div>
+        <span class="tb-title">Zyeen Studio</span>
+      </div>
+
+      <div class="topbar-center" id="topbarCenter"></div>
+
+      <div class="topbar-right">
+        <button class="btn-topbar" id="btnOpenTop">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M1 4h3l1.5-2h5L12 4H1zM1 4v8h12V4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
+          </svg>
+          Upload
+        </button>
+        <div class="topbar-transport" id="topbarTransport" style="display:none">
+          <button class="tt-btn" id="tbPlay" title="Play / Pause">▶</button>
+          <button class="tt-btn" id="tbStop" title="Stop">■</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="content" id="content">
+
+      <!-- DROP ZONE -->
+      <section class="drop-zone" id="dropZone" role="button" tabindex="0"
+               aria-label="Upload audio file — click or drag and drop">
+        <div class="dz-inner">
+          <div class="dz-icon" id="dzIcon">🎵</div>
+          <div class="dz-title" id="dzTitle">Drop audio file here</div>
+          <div class="dz-sub"   id="dzSub">
+            Click to browse · <strong>MP3, WAV, OGG, FLAC</strong> supported
+          </div>
+        </div>
+      </section>
+      <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.ogg,.flac,.aac,.m4a" />
+
+      <!-- PLAYER -->
+      <section class="player-card" id="playerCard" style="display:none">
+        <div class="player-header">
+          <div class="ph-left">
+            <span class="ph-icon">⚡</span>
+            <span class="ph-label">WAVEFORM</span>
+          </div>
+          <div class="ph-time" id="phTime">0:00 / 0:00</div>
+        </div>
+
+        <canvas id="waveCanvas" class="wave-canvas" aria-label="Audio waveform"></canvas>
+
+        <div class="spectrum-bar">
+          <canvas id="specCanvas" class="spec-canvas" aria-label="Frequency spectrum"></canvas>
+        </div>
+
+        <div class="player-controls">
+          <div class="pc-left">
+            <button class="pc-play" id="pcPlay" aria-label="Play / Pause">▶</button>
+            <button class="pc-stop" id="pcStop" aria-label="Stop">■</button>
+          </div>
+
+          <div class="pc-seek-wrap">
+            <div class="pc-seek" id="pcSeek" role="slider" aria-label="Seek position">
+              <div class="pc-seek-fill"  id="pcSeekFill"></div>
+              <div class="pc-seek-thumb" id="pcSeekThumb"></div>
+            </div>
+            <div class="pc-times">
+              <span id="pcCur">0:00</span>
+              <span id="pcTot">0:00</span>
+            </div>
+          </div>
+
+          <div class="pc-right">
+            <button class="cmp-btn active" id="btnOrig">Original</button>
+            <button class="cmp-btn"        id="btnProc">Processed</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDIO GRID -->
+      <div class="studio-grid" id="studioGrid" style="display:none">
+
+        <!-- LEFT COLUMN -->
+        <div class="col-left">
+
+          <!-- PROCESSOR -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon cyan">⚡</div>
+              <div>
+                <div class="ch-title">Processor</div>
+                <div class="ch-sub">Speed · Pitch · Volume</div>
+              </div>
+            </div>
+            <div class="ctrl-list">
+              <div class="ctrl-row">
+                <label class="ctrl-label" for="sldSpeed">Speed</label>
+                <div class="ctrl-track">
+                  <input type="range" class="slider" id="sldSpeed"
+                    min="0.5" max="2.0" step="0.01" value="1.0" aria-label="Playback speed" />
+                </div>
+                <span class="ctrl-val" id="valSpeed">1.00x</span>
+              </div>
+              <div class="ctrl-row">
+                <label class="ctrl-label" for="sldPitch">Pitch</label>
+                <div class="ctrl-track">
+                  <input type="range" class="slider" id="sldPitch"
+                    min="-12" max="12" step="1" value="0" aria-label="Pitch in semitones" />
+                </div>
+                <span class="ctrl-val" id="valPitch">0 st</span>
+              </div>
+              <div class="ctrl-row">
+                <label class="ctrl-label" for="sldVolume">Volume</label>
+                <div class="ctrl-track">
+                  <input type="range" class="slider" id="sldVolume"
+                    min="0" max="200" step="1" value="100" aria-label="Volume" />
+                </div>
+                <span class="ctrl-val" id="valVolume">100%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- EQUALIZER -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon purple">📊</div>
+              <div>
+                <div class="ch-title">Equalizer</div>
+                <div class="ch-sub">9-band EQ</div>
+              </div>
+            </div>
+            <div class="eq-board" id="eqBoard"></div>
+            <div class="chip-row" id="eqPresetRow">
+              <button class="chip active" data-eq="flat">Flat</button>
+              <button class="chip" data-eq="bass">Bass Boost</button>
+              <button class="chip" data-eq="treble">Treble</button>
+              <button class="chip" data-eq="vocal">Vocal</button>
+              <button class="chip" data-eq="lofi">Lo-Fi</button>
+              <button class="chip" data-eq="rock">Rock</button>
+              <button class="chip" data-eq="pop">Pop</button>
+              <button class="chip" data-eq="jazz">Jazz</button>
+              <button class="chip" data-eq="classical">Classical</button>
+            </div>
+          </div>
+
+          <!-- EFFECTS -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon pink">✨</div>
+              <div>
+                <div class="ch-title">Effects</div>
+                <div class="ch-sub">Real-time DSP</div>
+              </div>
+            </div>
+            <div class="fx-list" id="fxList"></div>
+          </div>
+
+        </div><!-- /col-left -->
+
+        <!-- RIGHT COLUMN -->
+        <div class="col-right">
+
+          <!-- QUICK PRESETS -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon purple">⚡</div>
+              <div>
+                <div class="ch-title">Quick Presets</div>
+                <div class="ch-sub">One-click styles</div>
+              </div>
+            </div>
+            <div class="preset-grid" id="presetGrid"></div>
+            <button class="btn-reset" id="btnReset">↺ Reset All Settings</button>
+          </div>
+
+          <!-- EXPORT -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon green">💾</div>
+              <div>
+                <div class="ch-title">Export</div>
+                <div class="ch-sub">Download processed audio</div>
+              </div>
+            </div>
+
+            <div class="fmt-row">
+              <button class="fmt-btn active" data-fmt="wav">
+                <span class="fmt-name">WAV</span>
+                <span class="fmt-sub">Lossless</span>
+              </button>
+              <button class="fmt-btn" data-fmt="mp3">
+                <span class="fmt-name">MP3*</span>
+                <span class="fmt-sub">Compressed</span>
+              </button>
+            </div>
+            <div class="fmt-note" id="fmtNote" style="display:none">
+              * Browser encodes as WAV (no native MP3 encoder in browser)
+            </div>
+
+            <div class="export-meta" id="exportMeta">
+              Speed: <span class="em-val">1.00x</span> ·
+              Pitch: <span class="em-val">0st</span> ·
+              Vol: <span class="em-val">100%</span>
+            </div>
+
+            <div class="export-name-wrap">
+              <input type="text" id="exportName" class="export-input"
+                placeholder="File name (optional)" aria-label="Export file name" />
+            </div>
+
+            <button class="btn-export" id="btnExport" disabled>
+              ⬇ Export &amp; Download
+            </button>
+          </div>
+
+          <!-- HISTORY -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ch-icon cyan">🕐</div>
+              <div>
+                <div class="ch-title">History</div>
+                <div class="ch-sub">Recent exports</div>
+              </div>
+            </div>
+            <div class="hist-list" id="histList">
+              <div class="hist-empty">No exports yet</div>
+            </div>
+          </div>
+
+        </div><!-- /col-right -->
+      </div><!-- /studio-grid -->
+    </div><!-- /content -->
+  </main>
+
+  <!-- PROGRESS OVERLAY -->
+  <div class="progress-overlay" id="progressOverlay" aria-hidden="true">
+    <div class="progress-box">
+      <div class="pb-title">Processing Audio</div>
+      <div class="pb-sub" id="pbSub">Rendering...</div>
+      <div class="pb-bar-wrap"><div class="pb-bar" id="pbBar"></div></div>
+      <div class="pb-pct" id="pbPct">0%</div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/audio.js" onerror="console.error('audio.js failed to load')"></script>
+  <script src="js/ui.js"    onerror="console.error('ui.js failed to load')"></script>
+  <script src="js/main.js"  onerror="console.error('main.js failed to load')"></script>
+</body>
+</html>
