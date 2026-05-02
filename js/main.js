@@ -359,18 +359,44 @@
       ZyUI.showProgress(5, 'Memulai render...');
       const rendered = await ZyAudio.render((pct, text) => ZyUI.showProgress(pct, text));
 
-      ZyUI.showProgress(95, 'Encoding WAV...');
-      await new Promise(r => setTimeout(r, 80));
+      const name = (ge('exportName').value.trim() || currentFileName || 'zyeen_export')
+                    .replace(/[^\w\-_.]/g, '_');
 
-      const blob = encodeWAV(rendered);
-      const name = (ge('exportName').value.trim() || currentFileName || 'zyeen_export').replace(/[^\w\-_.]/g,'_');
-      downloadBlob(blob, name + '.wav');
-
-      ZyUI.showProgress(100, 'Selesai!');
-      await new Promise(r => setTimeout(r, 500));
-      ZyUI.hideProgress();
-      ZyUI.addHistory(name, rendered.duration, 'WAV');
-      ZyUI.toast('Export selesai! 🎉', 'success');
+      if (exportFormat === 'mp3') {
+        ZyUI.showProgress(92, 'Encoding MP3...');
+        await new Promise(r => setTimeout(r, 60));
+        try {
+          const blob = await encodeMp3(rendered);
+          ZyUI.showProgress(100, 'Selesai!');
+          await new Promise(r => setTimeout(r, 400));
+          ZyUI.hideProgress();
+          downloadBlob(blob, name + '.mp3');
+          ZyUI.addHistory(name, rendered.duration, 'MP3');
+          ZyUI.toast('Export MP3 selesai! 🎉', 'success');
+        } catch (mp3Err) {
+          // Fallback to WAV if MP3 encoder not available
+          console.warn('MP3 encoding failed, falling back to WAV:', mp3Err);
+          ZyUI.showProgress(92, 'Fallback ke WAV...');
+          await new Promise(r => setTimeout(r, 60));
+          const blob = encodeWAV(rendered);
+          ZyUI.showProgress(100, 'Selesai!');
+          await new Promise(r => setTimeout(r, 400));
+          ZyUI.hideProgress();
+          downloadBlob(blob, name + '.wav');
+          ZyUI.addHistory(name, rendered.duration, 'WAV (MP3 fallback)');
+          ZyUI.toast('Export WAV selesai (MP3 tidak tersedia di browser ini)', 'success');
+        }
+      } else {
+        ZyUI.showProgress(92, 'Encoding WAV...');
+        await new Promise(r => setTimeout(r, 60));
+        const blob = encodeWAV(rendered);
+        ZyUI.showProgress(100, 'Selesai!');
+        await new Promise(r => setTimeout(r, 400));
+        ZyUI.hideProgress();
+        downloadBlob(blob, name + '.wav');
+        ZyUI.addHistory(name, rendered.duration, 'WAV');
+        ZyUI.toast('Export WAV selesai! 🎉', 'success');
+      }
 
     } catch (err) {
       ZyUI.hideProgress();
@@ -379,6 +405,59 @@
     } finally {
       btn.disabled = false;
     }
+  }
+
+  /* ── MP3 ENCODER (via lamejs CDN) ────────────────── */
+  async function encodeMp3(buf) {
+    // lamejs must be loaded — we lazy-load it
+    if (typeof lamejs === 'undefined') {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js');
+    }
+
+    const nCh    = buf.numberOfChannels;
+    const sr     = buf.sampleRate;
+    const kbps   = 192;
+    const mp3enc = new lamejs.Mp3Encoder(nCh, sr, kbps);
+    const chunks = [];
+
+    const BLOCK = 1152;
+    const L = buf.getChannelData(0);
+    const R = nCh > 1 ? buf.getChannelData(1) : L;
+
+    // Convert Float32 → Int16
+    function toInt16(f32) {
+      const i16 = new Int16Array(f32.length);
+      for (let i = 0; i < f32.length; i++) {
+        const s = Math.max(-1, Math.min(1, f32[i]));
+        i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return i16;
+    }
+
+    const lI16 = toInt16(L);
+    const rI16 = toInt16(R);
+
+    for (let i = 0; i < lI16.length; i += BLOCK) {
+      const lChunk = lI16.subarray(i, i + BLOCK);
+      const rChunk = rI16.subarray(i, i + BLOCK);
+      const encoded = nCh > 1
+        ? mp3enc.encodeBuffer(lChunk, rChunk)
+        : mp3enc.encodeBuffer(lChunk);
+      if (encoded.length > 0) chunks.push(new Int8Array(encoded));
+    }
+    const flushed = mp3enc.flush();
+    if (flushed.length > 0) chunks.push(new Int8Array(flushed));
+
+    return new Blob(chunks, { type: 'audio/mp3' });
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
   }
 
   /* ── WAV ENCODER ─────────────────────────────────── */
