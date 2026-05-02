@@ -349,7 +349,7 @@ const ZyAudio = (() => {
 
   function setPitch(semitones) {
     P.pitch = semitones;
-    // Pitch is applied during export (resample). Live preview: use detune on source.
+    // Pitch via detune (cents). Both live and export use the same method.
     if (sourceNode) {
       sourceNode.detune.setTargetAtTime(semitones * 100, ctx.currentTime, 0.04);
     }
@@ -392,13 +392,13 @@ const ZyAudio = (() => {
 
     ensureCtx();
 
-    // Duration after speed change
+    // Correct output length: raw samples / speed + tail for FX decay
+    // (OfflineAudioContext renders exactly outLen samples regardless of playbackRate)
     const speedFactor = P.speed;
-    const rawDur      = rawBuffer.duration;
-    const outDur      = rawDur / speedFactor;
     const sRate       = rawBuffer.sampleRate;
     const numCh       = rawBuffer.numberOfChannels;
-    const outLen      = Math.ceil(outDur * sRate * 1.05); // small buffer
+    const tailSamples = Math.ceil(sRate * 0.8); // 0.8s tail for reverb/echo decay
+    const outLen      = Math.ceil(rawBuffer.length / speedFactor) + tailSamples;
 
     const off = new OfflineAudioContext(numCh, outLen, sRate);
 
@@ -498,30 +498,23 @@ const ZyAudio = (() => {
 
     oGain.connect(off.destination);
 
-    // Source
+    // Source — use detune for pitch (IDENTICAL to live preview behaviour)
+    // detune in cents: semitones * 100
+    // This ensures export sounds EXACTLY like the live preview
     const oSrc = off.createBufferSource();
     oSrc.buffer = rawBuffer;
     oSrc.playbackRate.value = speedFactor;
-    oSrc.detune.value = 0; // pitch handled by resample below
+    oSrc.detune.value = P.pitch * 100; // semitones → cents, same as live
     oSrc.connect(oEQ[0]);
     oSrc.start(0);
 
-    onProgress && onProgress(20, 'Rendering audio graph...');
+    onProgress && onProgress(20, 'Rendering audio...');
     const rendered = await off.startRendering();
 
-    onProgress && onProgress(65, 'Applying pitch shift...');
+    onProgress && onProgress(90, 'Encoding...');
     await _sleep(30);
 
-    // Pitch shift via resample
-    let final = rendered;
-    if (P.pitch !== 0) {
-      final = _pitchShift(rendered, P.pitch);
-    }
-
-    onProgress && onProgress(90, 'Encoding WAV...');
-    await _sleep(30);
-
-    return final;
+    return rendered; // no extra pitch resample step needed
   }
 
   function _makeImpulseFor(offCtx, duration, decay) {
